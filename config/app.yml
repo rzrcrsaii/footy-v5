@@ -1,0 +1,249 @@
+# Footy-Brain v5 Application Configuration
+# Core application settings for JWT, database, RapidAPI, and caching
+
+# JWT Authentication Settings
+jwt:
+  secret_key: "${JWT_SECRET}"
+  algorithm: "HS256"
+  access_token_expire_minutes: 30
+  refresh_token_expire_days: 7
+  issuer: "footy-brain"
+  audience: "footy-brain-users"
+
+# RapidAPI Configuration
+rapidapi:
+  key: "${RAPIDAPI_KEY}"
+  base_url: "https://v3.football.api-sports.io"
+  host: "v3.football.api-sports.io"
+  max_rps: 6  # Maximum requests per second
+  max_rpm: 100  # Maximum requests per minute
+  max_rpd: 1000  # Maximum requests per day
+  timeout: 30
+  retry_attempts: 3
+  retry_delay: 1
+
+# Database Configuration
+database:
+  dsn: "postgresql://footy:${DB_PASSWORD}@pg:5432/footy"
+  pool_size: 20
+  max_overflow: 30
+  pool_timeout: 30
+  pool_recycle: 3600
+  echo: false  # Set to true for SQL query logging
+  
+  # TimescaleDB specific settings
+  timescale:
+    chunk_time_interval: "1 day"
+    compression_enabled: true
+    compression_after: "7 days"
+    
+  # Connection pool settings for async operations
+  async_pool:
+    min_size: 5
+    max_size: 20
+    max_queries: 50000
+    max_inactive_connection_lifetime: 300
+
+# Redis Cache Configuration
+cache:
+  redis_url: "redis://redis:6379/0"
+  default_ttl: 3600  # 1 hour
+  max_connections: 20
+  retry_on_timeout: true
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  
+  # Cache TTL settings for different data types
+  ttl:
+    fixtures: 1800      # 30 minutes
+    leagues: 86400      # 24 hours
+    teams: 86400        # 24 hours
+    countries: 604800   # 7 days
+    seasons: 604800     # 7 days
+    live_odds: 10       # 10 seconds
+    live_events: 30     # 30 seconds
+    prematch_odds: 3600 # 1 hour
+    player_stats: 7200  # 2 hours
+
+# Data Retention Policies (in days)
+retention_days:
+  live_odds_tick: 30
+  live_event_tick: 90
+  live_stats_tick: 60
+  prematch_odds: 365
+  fixture_events: 730
+  player_statistics: 365
+  team_statistics: 365
+
+# WebSocket Configuration
+websocket:
+  enabled: true
+  max_connections: 1000
+  heartbeat_interval: 30
+  connection_timeout: 60
+  message_queue_size: 1000
+  
+  # Real-time data broadcasting settings
+  broadcast:
+    live_odds_interval: 5     # seconds
+    live_events_interval: 2   # seconds
+    live_stats_interval: 10   # seconds
+
+# API Server Settings
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false
+  log_level: "info"
+  
+  # CORS settings
+  cors:
+    allow_origins: 
+      - "http://localhost:3000"
+      - "http://localhost:3001"
+      - "${FRONTEND_URL}"
+    allow_credentials: true
+    allow_methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+    allow_headers: ["*"]
+  
+  # Rate limiting
+  rate_limit:
+    enabled: true
+    requests_per_minute: 1000
+    burst_size: 100
+
+# Celery Configuration
+celery:
+  broker_url: "redis://redis:6379/1"
+  result_backend: "redis://redis:6379/2"
+  task_serializer: "json"
+  accept_content: ["json"]
+  result_serializer: "json"
+  timezone: "UTC"
+  enable_utc: true
+  
+  # Task routing
+  task_routes:
+    "apps.api_server.tasks.fixture_poller": {"queue": "fixtures"}
+    "apps.api_server.tasks.live_manager_trigger": {"queue": "live"}
+    "apps.api_server.tasks.prematch_snapshot": {"queue": "prematch"}
+    "apps.api_server.tasks.frame_maker": {"queue": "frames"}
+    "apps.api_server.tasks.finalizer": {"queue": "finalizer"}
+  
+  # Worker settings
+  worker:
+    concurrency: 4
+    prefetch_multiplier: 1
+    max_tasks_per_child: 1000
+    task_time_limit: 300
+    task_soft_time_limit: 240
+
+# Logging Configuration
+logging:
+  version: 1
+  disable_existing_loggers: false
+  
+  formatters:
+    default:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    detailed:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(module)s - %(funcName)s - %(lineno)d - %(message)s"
+    json:
+      format: '{"timestamp": "%(asctime)s", "name": "%(name)s", "level": "%(levelname)s", "message": "%(message)s"}'
+  
+  handlers:
+    console:
+      class: "logging.StreamHandler"
+      level: "INFO"
+      formatter: "default"
+      stream: "ext://sys.stdout"
+    
+    file:
+      class: "logging.handlers.RotatingFileHandler"
+      level: "DEBUG"
+      formatter: "detailed"
+      filename: "/var/log/footy-brain/app.log"
+      maxBytes: 10485760  # 10MB
+      backupCount: 5
+  
+  loggers:
+    "": # root logger
+      level: "INFO"
+      handlers: ["console"]
+      propagate: false
+    
+    "apps":
+      level: "DEBUG"
+      handlers: ["console", "file"]
+      propagate: false
+    
+    "tools":
+      level: "INFO"
+      handlers: ["console"]
+      propagate: false
+    
+    "uvicorn":
+      level: "INFO"
+      handlers: ["console"]
+      propagate: false
+    
+    "celery":
+      level: "INFO"
+      handlers: ["console"]
+      propagate: false
+
+# Monitoring & Observability
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9090
+    metrics_path: "/metrics"
+  
+  opentelemetry:
+    enabled: false
+    endpoint: "http://localhost:4317"
+    service_name: "footy-brain-api"
+    service_version: "5.0.0"
+  
+  health_check:
+    enabled: true
+    path: "/health"
+    include_db: true
+    include_redis: true
+    include_external_apis: false
+
+# Feature Flags
+features:
+  live_odds: true
+  live_events: true
+  live_stats: true
+  prematch_odds: true
+  player_stats: true
+  team_stats: true
+  h2h_stats: true
+  websocket_enabled: true
+  caching_enabled: true
+  rate_limiting_enabled: true
+  monitoring_enabled: true
+
+# Security Settings
+security:
+  allowed_hosts: ["*"]
+  trusted_hosts: ["localhost", "127.0.0.1", "api", "web"]
+  
+  # API Key validation
+  api_key_header: "X-API-Key"
+  require_api_key: false
+  
+  # Request size limits
+  max_request_size: 10485760  # 10MB
+  max_upload_size: 52428800   # 50MB
+
+# Development Settings (only used in development mode)
+development:
+  debug: false
+  hot_reload: true
+
+  seed_database: true
+  create_test_data: false

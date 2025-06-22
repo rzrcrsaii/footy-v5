@@ -1,0 +1,345 @@
+# Footy-Brain v5 Workers Configuration
+# Define background job schedules and worker settings for data collection
+
+# Configuration metadata
+version: "5.0.0"
+last_updated: "2024-01-01"
+description: "Background workers and scheduled tasks configuration"
+
+# Global worker settings
+global_settings:
+  # Default timezone for all cron jobs
+  timezone: "UTC"
+  
+  # Worker health check settings
+  health_check:
+    enabled: true
+    interval_seconds: 60
+    timeout_seconds: 30
+    
+  # Error handling
+  error_handling:
+    max_retries: 3
+    retry_delay_seconds: 60
+    exponential_backoff: true
+    max_retry_delay_seconds: 3600
+    
+  # Logging
+  logging:
+    level: "INFO"
+    include_task_args: false
+    include_task_result: false
+
+# Celery Beat Scheduled Tasks
+scheduled_tasks:
+  
+  # Fixture Data Collection
+  fixture_poller:
+    task: "apps.api_server.tasks.fixture_poller"
+    schedule_type: "cron"  # cron or interval
+    schedule: "0 */6 * * *"  # Every 6 hours
+    description: "Collect upcoming fixtures for tracked leagues"
+    enabled: true
+    priority: 2
+    queue: "fixtures"
+    soft_time_limit: 300
+    time_limit: 600
+    max_retries: 3
+    args: []
+    kwargs:
+      days_ahead: 7
+      update_existing: true
+    
+  # Live Match Manager
+  live_manager_trigger:
+    task: "apps.api_server.tasks.live_manager_trigger"
+    schedule_type: "interval"
+    schedule: 30  # Every 30 seconds
+    description: "Trigger live data collection for active matches"
+    enabled: true
+    priority: 1
+    queue: "live"
+    soft_time_limit: 25
+    time_limit: 30
+    max_retries: 2
+    args: []
+    kwargs:
+      check_match_status: true
+      auto_start_collection: true
+      
+  # Pre-match Odds Snapshot
+  prematch_snapshot:
+    task: "apps.api_server.tasks.prematch_snapshot"
+    schedule_type: "cron"
+    schedule: "0 */2 * * *"  # Every 2 hours
+    description: "Collect pre-match odds snapshots"
+    enabled: true
+    priority: 2
+    queue: "prematch"
+    soft_time_limit: 600
+    time_limit: 900
+    max_retries: 3
+    args: []
+    kwargs:
+      hours_before_match: 24
+      min_bookmakers: 3
+      
+  # Frame Maker (Data Aggregation)
+  frame_maker:
+    task: "apps.api_server.tasks.frame_maker"
+    schedule_type: "cron"
+    schedule: "*/1 * * * *"  # Every minute
+    description: "Aggregate live ticks into 1-minute frames"
+    enabled: true
+    priority: 2
+    queue: "frames"
+    soft_time_limit: 50
+    time_limit: 60
+    max_retries: 2
+    args: []
+    kwargs:
+      frame_duration_seconds: 60
+      include_stats: true
+      
+  # Match Finalizer
+  finalizer:
+    task: "apps.api_server.tasks.finalizer"
+    schedule_type: "interval"
+    schedule: 300  # Every 5 minutes
+    description: "Process finished matches and collect final stats"
+    enabled: true
+    priority: 2
+    queue: "finalizer"
+    soft_time_limit: 240
+    time_limit: 300
+    max_retries: 3
+    args: []
+    kwargs:
+      delay_after_finish_minutes: 30
+      collect_player_ratings: true
+      
+  # Weekly Data Refresh
+  weekly_refresh:
+    task: "apps.api_server.tasks.weekly_refresh"
+    schedule_type: "cron"
+    schedule: "0 2 * * 0"  # Every Sunday at 2 AM
+    description: "Weekly refresh of leagues, teams, and static data"
+    enabled: true
+    priority: 3
+    queue: "maintenance"
+    soft_time_limit: 1800
+    time_limit: 3600
+    max_retries: 2
+    args: []
+    kwargs:
+      update_leagues: true
+      update_teams: true
+      update_players: false
+      
+  # Cold Archive
+  cold_archive:
+    task: "apps.api_server.tasks.cold_archive"
+    schedule_type: "cron"
+    schedule: "0 3 * * *"  # Every day at 3 AM
+    description: "Archive old data according to retention policies"
+    enabled: true
+    priority: 3
+    queue: "maintenance"
+    soft_time_limit: 3600
+    time_limit: 7200
+    max_retries: 1
+    args: []
+    kwargs:
+      dry_run: false
+      compress_before_archive: true
+      
+  # Health Check Reporter
+  health_check_reporter:
+    task: "apps.api_server.tasks.health_check_reporter"
+    schedule_type: "cron"
+    schedule: "*/15 * * * *"  # Every 15 minutes
+    description: "Report system health metrics"
+    enabled: true
+    priority: 3
+    queue: "monitoring"
+    soft_time_limit: 60
+    time_limit: 120
+    max_retries: 1
+    args: []
+    kwargs:
+      include_db_stats: true
+      include_redis_stats: true
+      include_api_stats: true
+
+# Worker Pool Configuration
+worker_pools:
+  
+  # Default worker pool
+  default:
+    concurrency: 4
+    prefetch_multiplier: 1
+    max_tasks_per_child: 1000
+    task_time_limit: 300
+    task_soft_time_limit: 240
+    worker_max_memory_per_child: 200000  # KB
+    
+  # Live data workers (high frequency, low latency)
+  live:
+    concurrency: 2
+    prefetch_multiplier: 1
+    max_tasks_per_child: 500
+    task_time_limit: 60
+    task_soft_time_limit: 45
+    worker_max_memory_per_child: 150000
+    
+  # Fixture workers (medium frequency)
+  fixtures:
+    concurrency: 2
+    prefetch_multiplier: 2
+    max_tasks_per_child: 200
+    task_time_limit: 600
+    task_soft_time_limit: 480
+    worker_max_memory_per_child: 300000
+    
+  # Pre-match workers (low frequency, high volume)
+  prematch:
+    concurrency: 1
+    prefetch_multiplier: 1
+    max_tasks_per_child: 100
+    task_time_limit: 1800
+    task_soft_time_limit: 1500
+    worker_max_memory_per_child: 500000
+    
+  # Frame processing workers
+  frames:
+    concurrency: 1
+    prefetch_multiplier: 1
+    max_tasks_per_child: 1000
+    task_time_limit: 120
+    task_soft_time_limit: 90
+    worker_max_memory_per_child: 200000
+    
+  # Finalizer workers
+  finalizer:
+    concurrency: 1
+    prefetch_multiplier: 1
+    max_tasks_per_child: 50
+    task_time_limit: 600
+    task_soft_time_limit: 480
+    worker_max_memory_per_child: 400000
+    
+  # Maintenance workers (low priority, high resource)
+  maintenance:
+    concurrency: 1
+    prefetch_multiplier: 1
+    max_tasks_per_child: 10
+    task_time_limit: 7200
+    task_soft_time_limit: 6000
+    worker_max_memory_per_child: 1000000
+    
+  # Monitoring workers
+  monitoring:
+    concurrency: 1
+    prefetch_multiplier: 1
+    max_tasks_per_child: 100
+    task_time_limit: 300
+    task_soft_time_limit: 240
+    worker_max_memory_per_child: 100000
+
+# Queue Configuration
+queues:
+  # High priority queues
+  live:
+    priority: 10
+    max_length: 1000
+    message_ttl: 300  # 5 minutes
+    
+  # Medium priority queues
+  fixtures:
+    priority: 5
+    max_length: 500
+    message_ttl: 3600  # 1 hour
+    
+  prematch:
+    priority: 5
+    max_length: 200
+    message_ttl: 7200  # 2 hours
+    
+  frames:
+    priority: 5
+    max_length: 1000
+    message_ttl: 600  # 10 minutes
+    
+  finalizer:
+    priority: 5
+    max_length: 100
+    message_ttl: 1800  # 30 minutes
+    
+  # Low priority queues
+  maintenance:
+    priority: 1
+    max_length: 50
+    message_ttl: 86400  # 24 hours
+    
+  monitoring:
+    priority: 3
+    max_length: 100
+    message_ttl: 3600  # 1 hour
+
+# Rate Limiting for External API Calls
+rate_limiting:
+  # RapidAPI limits
+  rapidapi:
+    requests_per_second: 6
+    requests_per_minute: 100
+    requests_per_day: 1000
+    burst_allowance: 10
+    
+  # Internal rate limiting between workers
+  internal:
+    max_concurrent_api_calls: 5
+    api_call_timeout: 30
+    backoff_factor: 2
+    max_backoff_delay: 300
+
+# Monitoring and Alerting
+monitoring:
+  # Task execution monitoring
+  task_monitoring:
+    enabled: true
+    slow_task_threshold_seconds: 60
+    failed_task_alert_threshold: 5
+    
+  # Queue monitoring
+  queue_monitoring:
+    enabled: true
+    queue_length_alert_threshold: 100
+    queue_age_alert_threshold_minutes: 30
+    
+  # Worker monitoring
+  worker_monitoring:
+    enabled: true
+    memory_usage_alert_threshold_mb: 400
+    cpu_usage_alert_threshold_percent: 80
+    
+  # Alerts configuration
+  alerts:
+    enabled: true
+    channels: ["log", "redis"]  # Available: log, redis, slack, email
+    cooldown_minutes: 15
+
+# Development and Testing Settings
+development:
+  # Override settings for development environment
+  enabled: false
+  
+  # Reduced frequencies for development
+  dev_schedules:
+    fixture_poller: "0 */12 * * *"  # Every 12 hours instead of 6
+    live_manager_trigger: 60  # Every minute instead of 30 seconds
+    prematch_snapshot: "0 */4 * * *"  # Every 4 hours instead of 2
+    
+
+  
+  # Reduced worker concurrency
+  dev_concurrency: 1

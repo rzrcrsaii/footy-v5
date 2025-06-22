@@ -1,0 +1,65 @@
+{
+  "name": "footy-brain",
+  "version": "5.0.0",
+  "description": "Real-time football data ingestion and analysis platform with live betting odds",
+  "private": true,
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "type-check": "turbo run type-check",
+    "test": "turbo run test",
+    "test:watch": "turbo run test:watch",
+    "clean": "turbo run clean",
+    "web:dev": "pnpm --filter web-dashboard dev",
+    "web:build": "pnpm --filter web-dashboard build",
+    "web:start": "pnpm --filter web-dashboard start",
+    "web:lint": "pnpm --filter web-dashboard lint",
+    "web:type-check": "pnpm --filter web-dashboard type-check",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "db:migrate": "docker compose exec api alembic upgrade head",
+    "db:seed": "docker compose exec api python -m apps.api_server.db.init",
+    "setup": "pnpm install && pnpm build",
+    "start": "docker compose up -d && pnpm web:dev"
+  },
+  "devDependencies": {
+    "@turbo/gen": "^1.11.2",
+    "turbo": "^1.11.2",
+    "prettier": "^3.1.1",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/footy-brain/footy-brain.git"
+  },
+  "keywords": [
+    "football",
+    "betting",
+    "odds",
+    "real-time",
+    "nextjs",
+    "fastapi",
+    "timescaledb",
+    "websocket",
+    "microservices"
+  ],
+  "author": "Footy-Brain Team",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/footy-brain/footy-brain/issues"
+  },
+  "homepage": "https://github.com/footy-brain/footy-brain#readme"
+}

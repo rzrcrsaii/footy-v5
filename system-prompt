@@ -1,0 +1,294 @@
+## 🌳 **Footy-Brain v5 — Eksiksiz klasör/dosya ağacı**
+
+> *Satır sonundaki `⇒ …` notları ilgili **RapidAPI endpoint(ler)** veya özel amacı gösterir.*
+> *Dosya/klasör yoksa → **ekle** demen yeter – modüler tasarım buna göre ölçeklenir.*
+
+```text
+footy-brain/
+├── .env.example
+├── pyproject.toml                    # Poetry (Python 3.11 pkg’leri)
+├── README.md                         # quick-start + genişletme
+├── LICENSE                           # MIT
+├── package.json                      # turborepo kökü
+├── pnpm-workspace.yaml
+├── docker-compose.yml                # tüm servisler
+│
+├── /infra
+│   ├── k8s/                          # deployment yamlları
+│   ├── helm/                         # helm chart
+│   ├── grafana/                      # Timescale & worker dashboard’ları
+│   └── github-actions/
+│       └── ci.yml                    # lint • test • build • push • helm-lint
+│
+├── /config
+│   ├── app.yml                       # JWT, DB DSN, RapidAPI key, cache
+│   ├── leagues.yml                   # takib-edilecek {ülke,lig,season}
+│   └── workers.yml                   # cron & poll frekans tanımları
+│
+├── /database
+│   ├── ddl/
+│   │   ├── 00_dim_tables.sql         # country, league, …, bet_def_*
+│   │   ├── 10_fact_tables.sql        # fixture, prematch*, live_*_tick …
+│   │   ├── 20_continuous_aggs.sql    # live_odds_tick_ohlc vb.
+│   │   └── 99_retention_policies.sql # Timescale retention + compress
+│   └── seeds/
+│       └── bootstrap_static.sql      # ilkin ülke-lig-bet defs
+│
+├── /tools                 # ✅ **TÜM** RapidAPI wrapper’ları + iskelet
+│   ├── template_wrapper.py            # “yeni endpoint” şablonu
+│   ├── api_config.py                  # ortak header + limiter
+│   ├── base_service.py                # GET/params/helper
+│   ├── error_handler.py
+│   ├── countries_service.py                 ⇒  /countries
+│   ├── leagues_txt_service.py               ⇒  /leagues
+│   ├── seasons_service.py                   ⇒  /leagues/seasons
+│   ├── fixtures_service.py                  ⇒  /fixtures?date | /live
+│   ├── fixtures_round_service.py            ⇒  /fixtures/round
+│   ├── fixture_events_service.py            ⇒  /fixtures/events
+│   ├── fixture_statistics_service.py        ⇒  /fixtures/statistics
+│   ├── fixture_playerstatistics_service.py  ⇒  /fixtures/playerstatistics
+│   ├── fixture_lineups_service.py           ⇒  /fixtures/lineups
+│   ├── fixture_h2h_service.py               ⇒  /fixtures/h2h
+│   ├── odds_live_service.py                 ⇒  /odds/live
+│   ├── odds_live_bets_service.py            ⇒  /odds/live/bets
+│   ├── prematch_odds_service.py             ⇒  /odds
+│   ├── prematch_mapping_service.py          ⇒  /odds/mapping
+│   ├── prematch_bookmakers_service.py       ⇒  /prematch/bookmakers
+│   ├── prematch_bets_service.py             ⇒  /prematch/bets
+│   ├── injuries_service.py                  ⇒  /injuries
+│   ├── player_profiles_service.py           ⇒  /players
+│   ├── player_squads_service.py             ⇒  /players/squads
+│   ├── player_statistics_service.py         ⇒  /players/statistics
+│   ├── standings_service.py                 ⇒  /standings
+│   ├── team_countries_service.py            ⇒  /teams/countries
+│   ├── teamsinfo_service.py                 ⇒  /teams
+│   ├── team_statistics_service.py           ⇒  /teams/statistics
+│   ├── timezone_service.py                  ⇒  /timezone
+│   └── (future wrappers buraya eklenir)
+│
+├── /apps
+│   ├── api-server/               # 🎛  FastAPI mikro-çekirdek
+│   │   ├── main.py               # boot: cfg + DB + Celery + routers
+│   │   ├── deps.py               # auth & db session
+│   │   ├── plugin_loader.py      # /tools/*_service.py oto-discover
+│   │   ├── tasks.py              # Celery görevleri (pollers, finalizer…)
+│   │   ├── db/
+│   │   │   ├── init.py           # DDL • cont-agg • retention • seed
+│   │   │   └── models.py         # SQLModel tabloları
+│   │   ├── realtime/
+│   │   │   ├── listener.py       # pgmq → Redis pub
+│   │   │   └── websocket.py      # /ws/live/{fixtureId}
+│   │   └── routers/
+│   │       ├── fixtures.py       ⇒  SELECT fixture & ilişkili tablolar
+│   │       ├── live.py           ⇒  anlık odds/events feed
+│   │       ├── prematch.py       ⇒  prematch_ODDS snapshot API
+│   │       ├── cronjobs.py       ⇒  CRUD workers + Celery beat sync
+│   │       ├── settings.py       ⇒  leagues.yml · bet defs · workers.yml
+│   │       └── plugins.py        ⇒  wrapper metadata / load - add
+│   │
+│   ├── live-worker/              # ⚡ 5-10 s ingest döngüsü
+│   │   ├── worker.py             # odds_live/events/stats → live_*_tick
+│   │   └── conf.yml              # internal bet-id eşlemesi
+│   │
+│   ├── frame-worker/             # 🕑 1 dk özet composer
+│   │   └── frame_worker.py       # live ticks → match_live_frame
+│   │
+│   └── web-dashboard/            # 💻 Next.js 14 + Tailwind + shadcn/ui
+│       ├── app/
+│       │   ├── layout.tsx
+│       │   ├── page.tsx                # Dashboard (bugün canlı)
+│       │   ├── fixtures/               # tarih seç • server actions
+│       │   ├── live/                   # odds WS + events timeline
+│       │   ├── cron-settings/          # workers.yml CRUD
+│       │   ├── ingest-settings/        # leagues.yml CRUD
+│       │   ├── plugins/                # wrapper registry UI
+│       │   └── openai40/               # deneme playground
+│       └── lib/
+│           ├── useLiveOdds.ts          # WS hook
+│           ├── auth.ts                 # NextAuth
+│           └── api.ts                  # TanStack Query client
+│
+└── docker-compose.yml (servisler)
+    ├── pg                 # Timescale 2.13 / PG 16
+    ├── redis
+    ├── api
+    ├── celery-worker
+    ├── celery-beat
+    ├── live-worker
+    ├── frame-worker
+    ├── pgmq-listener
+    └── web
+```
+
+---
+
+### 2️⃣  **Akış & görev haritası**
+
+| Aşama / Worker         | Ana Wrapper ⇒ Endpoint(s)                        | Yazdığı/Siltiği tablo    | Frekans (varsayılan) | Ayarlanabilir?\*   |
+| ---------------------- | ------------------------------------------------ | ------------------------ | -------------------- | ------------------ |
+| **Bootstrap static**   | countries, leagues, teamsinfo…                   | boyut tabloları          | elle + haftalık      | `workers.yml`      |
+| **fixtures\_poller**   | `fixtures_service` ⇒ /fixtures?date              | `fixture`                | günde 1 (00:05)      | ✓ cron             |
+| **prematch\_snapshot** | `prematch_odds_service` ⇒ /odds                  | `prematch_odds_snapshot` | 3 sa                 | ✓ cron             |
+| **live\_loop**         | odds\_live / events / statistics                 | live\_\*\_tick           | 7 sn                 | ✓ poll\_every\_sec |
+| **frame\_maker**       | *(internal SQL)*                                 | match\_live\_frame       | 60 sn                | ✓ cron             |
+| **finalizer**          | statistics + events (final) / prematch (closing) | match\_result, stats     | status = FT trigger  | oto                |
+| **weekly\_refresh**    | injuries, standings, player\_profiles …          | dim & lookup             | pazar 03:00          | ✓ cron             |
+
+\* `/cron-settings` sayfasından **anında** update ⇒ Celery beat + workers.yml.
+
+---
+
+### 3️⃣  **Konfigürasyon dosyaları**
+
+```yaml
+# config/app.yml  (ör)
+jwt:
+  secret_key: "${JWT_SECRET}"
+rapidapi:
+  key: "${RAPIDAPI_KEY}"
+  max_rps: 6
+database:
+  dsn: "postgresql://footy:${DB_PW}@pg:5432/footy"
+retention_days:
+  live_odds_tick: 30
+  live_event_tick: 90
+cache:
+  redis_url: "redis://redis:6379/0"
+```
+
+`leagues.yml` – UI seçer, live-worker filtreler
+`workers.yml` – hem Celery beat hem UI cron-editor için tek kaynak.
+
+---
+
+### 4️⃣  **Neden bu yapı “boşluksuz”?**
+
+| İhtiyaç                          | Klasör/dosya / modül                            | Açıklama kısa                                  |
+| -------------------------------- | ----------------------------------------------- | ---------------------------------------------- |
+| **Maç öncesi** tüm snapshot’lar  | prematch\_\* wrapper’ları + prematch\_worker    | açılış/kapanış + ara snapshot                  |
+| **Maç içi** ham tick + anlık WS  | live-worker → Timescale → pgmq → WS             | 5-10 s ingest, 1 dk agg, anında WebSocket push |
+| **Maç sonrası** sonuç & FT stats | finalizer task + match\_result/stats tablolar   | status=FT tetiklenince                         |
+| **Çift-DB** (ham vs özet)        | live\_\*\_tick (retention) & match\_live\_frame | ham 30-90 gün, özet sonsuz                     |
+| **Frekans ayarı** dinamik        | workers.yml + /cron-settings UI                 | cron/poll editable                             |
+| **Lig/ülke/bet seçimi** dinamik  | leagues.yml + /ingest-settings UI               | canlı ingest’i filtreler                       |
+| **Yeni endpoint ekleme**         | template\_wrapper.py + /plugins router+UI       | plug-n-play RapidAPI sarmalayıcı               |
+| **Genişletilebilir UI**          | Next.js 14 (/app) dizin-bazlı routing           | yeni sayfa klasörü ⇒ anında rota               |
+| **Scale-out ready**              | Docker Compose → k8s helm chart                 | aynı klasör, farklı ortam                      |
+
+---
+
+### 5️⃣  **Bir sonraki hamle**
+
+1. **“Onaylıyorum”** diye cevapla → `design_prompt.md`’yi canvas’a atıyorum.
+2. İstersen README, DDL veya herhangi bir modülün “mini detay-yakala” ekine gidebiliriz.
+3. Ardından **`augmentcode generate design_prompt.md`** komutu ile bütün iskelet kod senin repo’na dökülmeye hazır 🚀
+
+*Hangi satır hâlâ eksik görünüyorsa çekinmeden söyle – düzeltip son hâle getiririz.*
+<!-- ############  🔧 Footy-Brain Monorepo — AUGMENTCODE JOB (v5 FINAL)  ############ -->
+
+You are ChatGPT-o3 **inside the augmentcode tool**.  
+Your task: generate a **production-ready boilerplate** that implements the *entire* Footy-Brain v5 architecture described above.
+
+---
+
+## 0. Golden rules (‼️ read first)
+1. **Mirror the exact directory tree** given earlier—no extra, no missing paths.
+2. Every file must compile / build *out-of-the-box* with  
+   `docker compose up -d && pnpm --filter web-dashboard dev`.
+3. No hard-coded secrets; read from **env vars** or the YAML configs in `/config`.
+4. Deep business logic may be shortened with `# TODO:` comments, **but interfaces, data flow, and wiring must be concrete and working**.
+5. Language / version pins:  
+   * Python 3.11 • Poetry • FastAPI ≥ 0.110 • SQLModel 0.0.16  
+   * Node 18 • pnpm • Next.js 14 • Tailwind v3 • shadcn/ui  
+   * TimescaleDB 2.13 / PG 16 • Redis 7 • Celery 5+
+
+---
+
+## 1.  Python back-end
+
+### 1.1  `apps/api-server`
+* **`main.py`**  
+  – Load `.env` and YAMLs (`config/app.yml`, `leagues.yml`, `workers.yml`).  
+  – Initialise **asyncpg** pool.  
+  – Execute all SQL files in `/database/ddl` **in numeric order**; create continuous aggregates & retention; run seeds if `country` is empty.  
+  – Start **plugin_loader** → auto-discover every file ending with `_service.py` under `/tools`.  
+  – Spin up **Celery Beat** with schedules from `workers.yml` (fallback DB table `cronjobs`).  
+  – Mount routers & WebSocket route; add JWT auth; protect `/docs`.
+
+* **Routers** (`/apps/api-server/routers`)  
+  `fixtures.py`, `live.py`, `prematch.py`, `cronjobs.py`, `settings.py`, `plugins.py` – expose REST endpoints exactly matching UI needs.
+
+* **Realtime layer** (`/apps/api-server/realtime`)  
+  `listener.py` listens **pgmq**, publishes JSON payloads to Redis channel `"live-feed"`;  
+  `websocket.py` consumes that channel and multicasts to all `/ws/live/{fixtureId}` clients.
+
+* **`tasks.py`** – register Celery jobs:  
+  `fixture_poller`, `prematch_snapshot`, `live_manager_trigger`, `frame_maker`, `finalizer`, `weekly_refresh`, `cold_archive`.
+
+* **`db/`**  
+  `init.py` (DDL orchestration) · `models.py`(SQLModel mappings, incl. Timescale hypertable table_args).
+
+### 1.2  Workers
+
+* **`apps/live-worker/worker.py`**  
+  – Read polling interval & endpoints from `workers.yml`.  
+  – For every live fixture (filtered by `leagues.yml`) call:  
+    `/odds/live`, `/fixtures/events`, `/fixtures/statistics`.  
+  – Bulk-COPY rows into `live_odds_tick`, `live_event_tick`, `live_stat_tick`.  
+  – Detect YAML change (`watchdog`) ⇒ soft reload.
+
+* **`apps/frame-worker/frame_worker.py`**  
+  – Every 60 s execute the SQL that materialises `match_live_frame` from tick tables.
+
+---
+
+## 2.  RapidAPI wrapper plug-ins (`/tools`)
+
+* Provide a **concrete implementation** for every file listed in the tree; each must inherit `base_service.BaseService` and expose a `fetch(**params) -> dict` method.
+* **`template_wrapper.py`** – minimal class ready to copy/paste.
+* `api_config.py` – stores base URL, key, rate-limit semaphore (6 rps default).
+* `error_handler.py` – raise typed Exceptions on non-200 or quota issues.
+
+---
+
+## 3.  Front-end (`/apps/web-dashboard`)
+
+* Use **Next.js 14 App Router**, Tailwind, shadcn/ui, **TanStack Query**.
+* Implement pages & components exactly under the folders in the tree:
+  * `/` – Dashboard with “Today’s Live Fixtures” table + OHLC sparkline (Recharts).
+  * `/fixtures` – date picker + server-side filtered list.
+  * `/live/[fixtureId]` – header (score), odds table (WebSocket), event timeline, stats chart.
+  * `/cron-settings` – editable grid of `workers.yml` (cron vs poll, interval-seconds, enabled). Use `cronstrue` for cron preview.
+  * `/ingest-settings` – country → league cascading select, multi-select bet types; PATCH → `/api/settings/ingest`.
+  * `/plugins` – list discovered wrappers, status badge; show code snippet from `template_wrapper.py` to scaffold new one.
+  * `/openai40` – blank playground page (placeholder).
+* `lib/useLiveOdds.ts` – thin WS hook (auto-reconnect, JSON parse, fixture filter).
+
+---
+
+## 4.  Docker & DevOps
+
+* **`docker-compose.yml`**  
+  services: `pg`, `redis`, `api`, `celery-worker`, `celery-beat`, `live-worker`, `frame-worker`, `pgmq-listener`, `web`; all with healthchecks and proper `depends_on`.  
+  Mount `/config` into workers as read-only volume, so YAML edits trigger reload.
+
+* **CI / CD (`infra/github-actions/ci.yml`)**  
+  matrix: {python, node}.  
+  steps: ruff lint → eslint lint → pytest → jest → docker build for every service → push to GHCR → helm-lint.
+
+* **Helm chart** in `/infra/helm/footy-brain` – values for image tags, env secrets, otel side-car toggle.
+
+---
+
+## 5.  Quality gates
+
+* All modules pass `mypy --strict` and `ruff --select all`.
+* `docker compose exec pg psql -c "\dt"` lists every table created by DDLs.
+* Front-end `pnpm prettier --check` = clean.
+
+---
+
+Deliver the scaffold **exactly** as specified.  
+Mark any deeper, domain-specific computation with `# TODO:` comments—but everything else (config loading, DB init, Celery wiring, WebSocket broadcast, basic UI pages) **must work out of the box**.
+
+<!-- ############  END OF JOB  ############ -->

@@ -1,0 +1,220 @@
+version: '3.8'
+
+services:
+  # TimescaleDB 2.13 / PostgreSQL 16
+  pg:
+    image: timescale/timescaledb:2.13.0-pg16
+    container_name: footy-pg
+    environment:
+      POSTGRES_DB: footy
+      POSTGRES_USER: footy
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-footy_secure_2024}
+      TIMESCALEDB_TELEMETRY: 'off'
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./database/ddl:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U footy -d footy"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - footy-network
+
+  # Redis 7
+  redis:
+    image: redis:7-alpine
+    container_name: footy-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - footy-network
+
+  # FastAPI API Server
+  api:
+    build:
+      context: .
+      dockerfile: apps/api-server/Dockerfile
+      target: prod
+    container_name: footy-api
+    environment:
+      - DATABASE_URL=postgresql://footy:${DB_PASSWORD:-footy_secure_2024}@pg:5432/footy
+      - REDIS_URL=redis://redis:6379/0
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - JWT_SECRET=${JWT_SECRET:-footy_jwt_secret_2024}
+      - ENVIRONMENT=production
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./config:/app/config:ro
+      - ./tools:/app/tools:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - footy-network
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: .
+      dockerfile: apps/api-server/Dockerfile
+      target: prod
+    container_name: footy-celery-worker
+    command: celery -A apps.api_server.tasks worker --loglevel=info --concurrency=4
+    environment:
+      - DATABASE_URL=postgresql://footy:${DB_PASSWORD:-footy_secure_2024}@pg:5432/footy
+      - REDIS_URL=redis://redis:6379/0
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - ENVIRONMENT=production
+    volumes:
+      - ./config:/app/config:ro
+      - ./tools:/app/tools:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - footy-network
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: .
+      dockerfile: apps/api-server/Dockerfile
+      target: prod
+    container_name: footy-celery-beat
+    command: celery -A apps.api_server.tasks beat --loglevel=info --scheduler=celery.schedulers:DatabaseScheduler
+    environment:
+      - DATABASE_URL=postgresql://footy:${DB_PASSWORD:-footy_secure_2024}@pg:5432/footy
+      - REDIS_URL=redis://redis:6379/0
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - ENVIRONMENT=production
+    volumes:
+      - ./config:/app/config:ro
+      - ./tools:/app/tools:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - footy-network
+
+  # Live Worker (5-10s ingest cycle)
+  live-worker:
+    build:
+      context: .
+      dockerfile: apps/live-worker/Dockerfile
+      target: prod
+    container_name: footy-live-worker
+    environment:
+      - DATABASE_URL=postgresql://footy:${DB_PASSWORD:-footy_secure_2024}@pg:5432/footy
+      - REDIS_URL=redis://redis:6379/0
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY}
+      - ENVIRONMENT=production
+    volumes:
+      - ./config:/app/config:ro
+      - ./tools:/app/tools:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - footy-network
+
+  # Frame Worker (1 min summary composer)
+  frame-worker:
+    build:
+      context: .
+      dockerfile: apps/frame-worker/Dockerfile
+      target: prod
+    container_name: footy-frame-worker
+    environment:
+      - DATABASE_URL=postgresql://footy:${DB_PASSWORD:-footy_secure_2024}@pg:5432/footy
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+    volumes:
+      - ./config:/app/config:ro
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - footy-network
+
+  # PGMQ Listener (pgmq → Redis pub)
+  pgmq-listener:
+    build:
+      context: .
+      dockerfile: apps/api-server/Dockerfile
+      target: prod
+    container_name: footy-pgmq-listener
+    command: python -m apps.api_server.realtime.listener
+    environment:
+      - DATABASE_URL=postgresql://footy:${DB_PASSWORD:-footy_secure_2024}@pg:5432/footy
+      - REDIS_URL=redis://redis:6379/0
+      - ENVIRONMENT=production
+    depends_on:
+      pg:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - footy-network
+
+  # Next.js Web Dashboard
+  web:
+    build:
+      context: .
+      dockerfile: apps/web-dashboard/Dockerfile
+      target: prod
+    container_name: footy-web
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+      - NEXT_PUBLIC_WS_URL=ws://api:8000
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET:-footy_nextauth_secret_2024}
+    ports:
+      - "3002:3000"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - footy-network
+
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  footy-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,341 @@
+# Footy-Brain v5 Leagues Configuration
+# Define which countries, leagues, and seasons to track for live data ingestion
+
+# Configuration metadata
+version: "5.0.0"
+last_updated: "2024-01-01"
+description: "Leagues and competitions configuration for live data tracking"
+
+# Global settings for league tracking
+global_settings:
+  # Default season (current season)
+  default_season: 2024
+  
+  # Time zones for match scheduling
+  default_timezone: "UTC"
+  
+  # Data collection preferences
+  collect_live_odds: true
+  collect_live_events: true
+  collect_live_stats: true
+  collect_prematch_odds: true
+  collect_player_stats: true
+  collect_team_stats: true
+  collect_h2h_stats: true
+  
+  # Update frequencies (in seconds)
+  live_update_interval: 10
+  prematch_update_interval: 3600  # 1 hour
+  stats_update_interval: 300      # 5 minutes
+
+# Tracked leagues by country and competition
+leagues:
+  # England
+  england:
+    country_id: 39
+    country_name: "England"
+    country_code: "GB"
+    leagues:
+      - league_id: 39
+        league_name: "Premier League"
+        season: 2024
+        priority: 1  # Highest priority
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 40
+        league_name: "Championship"
+        season: 2024
+        priority: 2
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 41
+        league_name: "League One"
+        season: 2024
+        priority: 3
+        enabled: false
+        collect_all_data: false
+        
+      - league_id: 42
+        league_name: "League Two"
+        season: 2024
+        priority: 4
+        enabled: false
+        collect_all_data: false
+
+  # Spain
+  spain:
+    country_id: 6
+    country_name: "Spain"
+    country_code: "ES"
+    leagues:
+      - league_id: 140
+        league_name: "La Liga"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 141
+        league_name: "Segunda División"
+        season: 2024
+        priority: 2
+        enabled: true
+        collect_all_data: false
+
+  # Germany
+  germany:
+    country_id: 25
+    country_name: "Germany"
+    country_code: "DE"
+    leagues:
+      - league_id: 78
+        league_name: "Bundesliga"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 79
+        league_name: "2. Bundesliga"
+        season: 2024
+        priority: 2
+        enabled: true
+        collect_all_data: false
+
+  # Italy
+  italy:
+    country_id: 27
+    country_name: "Italy"
+    country_code: "IT"
+    leagues:
+      - league_id: 135
+        league_name: "Serie A"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 136
+        league_name: "Serie B"
+        season: 2024
+        priority: 2
+        enabled: false
+        collect_all_data: false
+
+  # France
+  france:
+    country_id: 2
+    country_name: "France"
+    country_code: "FR"
+    leagues:
+      - league_id: 61
+        league_name: "Ligue 1"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 62
+        league_name: "Ligue 2"
+        season: 2024
+        priority: 2
+        enabled: false
+        collect_all_data: false
+
+  # Netherlands
+  netherlands:
+    country_id: 32
+    country_name: "Netherlands"
+    country_code: "NL"
+    leagues:
+      - league_id: 88
+        league_name: "Eredivisie"
+        season: 2024
+        priority: 2
+        enabled: true
+        collect_all_data: true
+
+  # Portugal
+  portugal:
+    country_id: 17
+    country_name: "Portugal"
+    country_code: "PT"
+    leagues:
+      - league_id: 94
+        league_name: "Primeira Liga"
+        season: 2024
+        priority: 2
+        enabled: true
+        collect_all_data: true
+
+  # Turkey
+  turkey:
+    country_id: 19
+    country_name: "Turkey"
+    country_code: "TR"
+    leagues:
+      - league_id: 203
+        league_name: "Süper Lig"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+
+  # International Competitions
+  international:
+    country_id: null
+    country_name: "International"
+    country_code: "INT"
+    leagues:
+      - league_id: 2
+        league_name: "UEFA Champions League"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 3
+        league_name: "UEFA Europa League"
+        season: 2024
+        priority: 1
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 848
+        league_name: "UEFA Europa Conference League"
+        season: 2024
+        priority: 2
+        enabled: true
+        collect_all_data: true
+        
+      - league_id: 1
+        league_name: "World Cup"
+        season: 2026
+        priority: 1
+        enabled: false
+        collect_all_data: true
+        
+      - league_id: 4
+        league_name: "UEFA European Championship"
+        season: 2024
+        priority: 1
+        enabled: false
+        collect_all_data: true
+
+# Bet types to collect for odds data
+bet_types:
+  enabled_bets:
+    - bet_id: 1
+      bet_name: "Match Winner"
+      description: "1X2 - Home/Draw/Away"
+      priority: 1
+      
+    - bet_id: 2
+      bet_name: "Over/Under 2.5"
+      description: "Total goals over or under 2.5"
+      priority: 1
+      
+    - bet_id: 3
+      bet_name: "Both Teams To Score"
+      description: "Both teams score - Yes/No"
+      priority: 1
+      
+    - bet_id: 4
+      bet_name: "Double Chance"
+      description: "1X, 12, X2"
+      priority: 2
+      
+    - bet_id: 5
+      bet_name: "Asian Handicap"
+      description: "Asian handicap betting"
+      priority: 2
+      
+    - bet_id: 8
+      bet_name: "Over/Under 1.5"
+      description: "Total goals over or under 1.5"
+      priority: 2
+      
+    - bet_id: 9
+      bet_name: "Over/Under 3.5"
+      description: "Total goals over or under 3.5"
+      priority: 2
+      
+    - bet_id: 12
+      bet_name: "Correct Score"
+      description: "Exact final score"
+      priority: 3
+
+# Bookmakers to track for odds comparison
+bookmakers:
+  enabled_bookmakers:
+    - bookmaker_id: 6
+      bookmaker_name: "Bwin"
+      priority: 1
+      
+    - bookmaker_id: 8
+      bookmaker_name: "Bet365"
+      priority: 1
+      
+    - bookmaker_id: 11
+      bookmaker_name: "Unibet"
+      priority: 1
+      
+    - bookmaker_id: 16
+      bookmaker_name: "10Bet"
+      priority: 2
+      
+    - bookmaker_id: 18
+      bookmaker_name: "18Bet"
+      priority: 2
+
+# Data collection schedules
+collection_schedules:
+  # Pre-match data collection
+  prematch:
+    # Days before match to start collecting odds
+    start_days_before: 7
+    # Hours before match to stop collecting
+    stop_hours_before: 0
+    # Collection interval in minutes
+    interval_minutes: 60
+    
+  # Live match data collection
+  live:
+    # Start collecting when match status is live
+    auto_start: true
+    # Collection interval in seconds
+    interval_seconds: 10
+    # Continue collecting for X minutes after match ends
+    continue_after_end_minutes: 15
+    
+  # Post-match data collection
+  postmatch:
+    # Collect final stats after match ends
+    collect_final_stats: true
+    # Delay before collecting final data (minutes)
+    delay_minutes: 30
+
+# Quality control settings
+quality_control:
+  # Minimum number of bookmakers required for odds
+  min_bookmakers_for_odds: 2
+  
+  # Maximum odds value (filter out obvious errors)
+  max_odds_value: 1000.0
+  
+  # Minimum odds value
+  min_odds_value: 1.01
+  
+  # Data validation rules
+  validation:
+    check_odds_consistency: true
+    check_event_timestamps: true
+    check_score_progression: true
+    
+  # Error handling
+  error_handling:
+    max_consecutive_errors: 5
+    error_cooldown_minutes: 10
+    notify_on_errors: true

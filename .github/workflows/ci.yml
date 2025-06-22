@@ -1,0 +1,245 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # =============================================================================
+  # PYTHON BACKEND TESTS
+  # =============================================================================
+  test-backend:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: footy_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.7.1
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+    
+    - name: Install project
+      run: poetry install --no-interaction
+    
+    - name: Run ruff linting
+      run: poetry run ruff check .
+    
+    - name: Run ruff formatting check
+      run: poetry run ruff format --check .
+    
+    - name: Run mypy type checking
+      run: poetry run mypy --strict tools/ apps/
+    
+    - name: Run pytest
+      env:
+        DATABASE_URL: postgresql://postgres:postgres@localhost:5432/footy_test
+        REDIS_URL: redis://localhost:6379/0
+        RAPIDAPI_KEY: test_key
+      run: poetry run pytest --cov=tools --cov=apps --cov-report=xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: backend
+        name: backend-coverage
+
+  # =============================================================================
+  # FRONTEND TESTS
+  # =============================================================================
+  test-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+    
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+    
+    - name: Get pnpm store directory
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+    
+    - name: Setup pnpm cache
+      uses: actions/cache@v3
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-
+    
+    - name: Install dependencies
+      working-directory: apps/web-dashboard
+      run: pnpm install --frozen-lockfile
+    
+    - name: Run ESLint
+      working-directory: apps/web-dashboard
+      run: pnpm lint
+    
+    - name: Run Prettier check
+      working-directory: apps/web-dashboard
+      run: pnpm format:check
+    
+    - name: Run TypeScript check
+      working-directory: apps/web-dashboard
+      run: pnpm type-check
+    
+    - name: Run tests
+      working-directory: apps/web-dashboard
+      run: pnpm test
+    
+    - name: Build application
+      working-directory: apps/web-dashboard
+      run: pnpm build
+
+  # =============================================================================
+  # DOCKER BUILD
+  # =============================================================================
+  build-images:
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    if: github.event_name == 'push'
+    
+    strategy:
+      matrix:
+        service: [api-server, web-dashboard, live-worker, frame-worker]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: apps/${{ matrix.service }}/Dockerfile
+        target: prod
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  # =============================================================================
+  # SECURITY SCANNING
+  # =============================================================================
+  security-scan:
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+    
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  # =============================================================================
+  # DEPLOYMENT (Production)
+  # =============================================================================
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: [build-images, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Deploy to production
+      run: |
+        echo "Production deployment would happen here"
+        echo "This could include:"
+        echo "- Kubernetes deployment"
+        echo "- Helm chart updates"
+        echo "- Database migrations"
+        echo "- Health checks"
