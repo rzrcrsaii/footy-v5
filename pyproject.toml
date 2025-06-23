@@ -2,12 +2,12 @@
 name = "footy-brain"
 version = "5.0.0"
 description = "Real-time football data ingestion and analysis platform with live betting odds"
-authors = ["Footy-Brain Team <team@footy-brain.com>"]
+authors = ["rzrcrsaii <rzrcrsaii@github.com>"]
 readme = "README.md"
 license = "MIT"
-homepage = "https://github.com/footy-brain/footy-brain"
-repository = "https://github.com/footy-brain/footy-brain"
-documentation = "https://docs.footy-brain.com"
+homepage = "https://github.com/rzrcrsaii/footy-v5"
+repository = "https://github.com/rzrcrsaii/footy-v5"
+documentation = "https://github.com/rzrcrsaii/footy-v5"
 keywords = ["football", "betting", "odds", "real-time", "api", "timescaledb"]
 classifiers = [
     "Development Status :: 4 - Beta",
