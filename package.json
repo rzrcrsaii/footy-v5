@@ -43,7 +43,7 @@
   "packageManager": "pnpm@8.15.1",
   "repository": {
     "type": "git",
-    "url": "https://github.com/footy-brain/footy-brain.git"
+    "url": "https://github.com/rzrcrsaii/footy-v5.git"
   },
   "keywords": [
     "football",
@@ -56,10 +56,10 @@
     "websocket",
     "microservices"
   ],
-  "author": "Footy-Brain Team",
+  "author": "rzrcrsaii",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/footy-brain/footy-brain/issues"
+    "url": "https://github.com/rzrcrsaii/footy-v5/issues"
   },
-  "homepage": "https://github.com/footy-brain/footy-brain#readme"
+  "homepage": "https://github.com/rzrcrsaii/footy-v5#readme"
 }
