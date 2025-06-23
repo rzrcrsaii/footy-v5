@@ -29,8 +29,8 @@ export function DashboardStats() {
 
   // Get Premier League fixtures for more comprehensive stats
   const { data: premierLeagueFixtures } = useQuery({
-    queryKey: queryKeys.fixtures.list({ league_id: 39, season_year: 2024, per_page: 50 }),
-    queryFn: () => apiClient.getFixtures({ league_id: 39, season_year: 2024, per_page: 50 }),
+    queryKey: queryKeys.fixtures.list({ league_id: 39, season_year: new Date().getFullYear(), per_page: 50 }),
+    queryFn: () => apiClient.getFixtures({ league_id: 39, season_year: new Date().getFullYear(), per_page: 50 }),
     refetchInterval: 300000,
   })
 

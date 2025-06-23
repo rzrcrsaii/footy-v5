@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { useWebSocket } from '@/lib/websocket/provider'
+import { HeaderClock } from '@/components/ui/live-clock'
 import { Wifi, WifiOff } from 'lucide-react'
 
 export function Header() {
@@ -21,7 +22,10 @@ export function Header() {
             {/* Search or other header content can go here */}
           </div>
           
-          <nav className="flex items-center space-x-2">
+          <nav className="flex items-center space-x-4">
+            {/* Live Clock */}
+            <HeaderClock />
+
             {/* WebSocket Connection Status */}
             <div className="flex items-center gap-2">
               {isConnected ? (
@@ -33,7 +37,7 @@ export function Header() {
                 {connectionStatus}
               </span>
             </div>
-            
+
             {/* User menu would go here */}
             <Button variant="ghost" size="sm">
               Admin

@@ -18,8 +18,8 @@ interface OddsMovement {
 export function OddsMovement() {
   // Get recent fixtures to simulate odds movements
   const { data: fixtures, isLoading } = useQuery({
-    queryKey: queryKeys.fixtures.list({ league_id: 39, season_year: 2024, per_page: 5 }),
-    queryFn: () => apiClient.getFixtures({ league_id: 39, season_year: 2024, per_page: 5 }),
+    queryKey: queryKeys.fixtures.list({ league_id: 39, season_year: new Date().getFullYear(), per_page: 5 }),
+    queryFn: () => apiClient.getFixtures({ league_id: 39, season_year: new Date().getFullYear(), per_page: 5 }),
     refetchInterval: 300000, // Refetch every 5 minutes
   })
 

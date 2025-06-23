@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
@@ -71,11 +71,12 @@ export const metadata: Metadata = {
     shortcut: '/favicon-16x16.png',
     apple: '/apple-touch-icon.png',
   },
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-  },
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
 }
 
 export default function RootLayout({
@@ -96,7 +97,7 @@ export default function RootLayout({
               <Navigation />
               
               {/* Main Content */}
-              <main className="flex-1 lg:pl-64">
+              <main className="flex-1 lg:pl-64 relative z-0">
                 <div className="px-4 py-6 sm:px-6 lg:px-8">
                   {children}
                 </div>

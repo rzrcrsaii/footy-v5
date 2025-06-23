@@ -17,8 +17,8 @@ export function LiveMatches() {
 
   // Also fetch Premier League fixtures for more data
   const { data: premierLeagueFixtures } = useQuery({
-    queryKey: queryKeys.fixtures.list({ league_id: 39, season_year: 2024, per_page: 10 }),
-    queryFn: () => apiClient.getFixtures({ league_id: 39, season_year: 2024, per_page: 10 }),
+    queryKey: queryKeys.fixtures.list({ league_id: 39, season_year: new Date().getFullYear(), per_page: 10 }),
+    queryFn: () => apiClient.getFixtures({ league_id: 39, season_year: new Date().getFullYear(), per_page: 10 }),
     refetchInterval: 300000, // Refetch every 5 minutes
   })
 
@@ -179,61 +179,100 @@ interface MatchCardProps {
 }
 
 function MatchCard({ fixture, isLive = false }: MatchCardProps) {
+  const isFinished = ['FT', 'AET', 'PEN'].includes(fixture.status_short)
+  const isUpcoming = ['NS', 'TBD'].includes(fixture.status_short)
+
+  // Format time from date string (Turkey timezone)
+  const formatMatchTime = (dateString: string) => {
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleTimeString('tr-TR', {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Europe/Istanbul'
+      })
+    } catch {
+      return '--:--'
+    }
+  }
+
+  // Check if match is today (Turkey timezone)
+  const isToday = (() => {
+    try {
+      const matchDate = new Date(fixture.date)
+      const today = new Date()
+      const matchDateTR = matchDate.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })
+      const todayTR = today.toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' })
+      return matchDateTR === todayTR
+    } catch {
+      return false
+    }
+  })()
+
   return (
-    <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="flex flex-col items-center min-w-[60px]">
-          <Badge 
-            className={`text-xs ${getMatchStatusColor(fixture.status_short)}`}
-          >
-            {getMatchStatusText(fixture.status_short)}
-          </Badge>
-          {fixture.status_elapsed && (
-            <span className="text-xs text-muted-foreground mt-1">
-              {fixture.status_elapsed}'
+    <Card className={`hover:shadow-md transition-shadow ${isToday ? 'ring-1 ring-primary/20 bg-primary/5' : ''}`}>
+      <CardContent className="p-3">
+        <div className="flex items-center gap-2 sm:gap-4">
+          {/* Time & Status */}
+          <div className="flex flex-col items-center min-w-[60px]">
+            <div className="text-xs font-medium">
+              {formatMatchTime(fixture.date)}
+            </div>
+            <Badge
+              variant={isLive ? "destructive" : isFinished ? "secondary" : "outline"}
+              className={`text-xs mt-1 ${isLive ? 'animate-pulse' : ''}`}
+            >
+              {isLive && '🔴 '}
+              {getMatchStatusText(fixture.status_short)}
+            </Badge>
+          </div>
+
+          {/* Home Team */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
+            <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm">
+              {fixture.home_team_name?.charAt(0) || 'H'}
+            </div>
+            <span className="font-medium truncate text-sm">
+              {fixture.home_team_name || 'Home Team'}
             </span>
-          )}
-        </div>
+          </div>
 
-        <div className="flex-1">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-sm">
-                {fixture.home_team_name}
-              </span>
-              {isLive && (
-                <span className="font-bold text-lg">
-                  {fixture.home_goals}
-                </span>
-              )}
-            </div>
+          {/* Score */}
+          <div className="flex items-center gap-1 min-w-[60px] justify-center">
+            {isFinished || isLive ? (
+              <div className="flex items-center gap-1 font-bold text-base">
+                <span>{fixture.home_goals}</span>
+                <span className="text-muted-foreground">-</span>
+                <span>{fixture.away_goals}</span>
+              </div>
+            ) : (
+              <div className="text-xs text-muted-foreground">vs</div>
+            )}
+            {isLive && fixture.status_elapsed && (
+              <div className="text-xs text-red-600 font-medium ml-1">
+                {fixture.status_elapsed}'
+              </div>
+            )}
           </div>
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-sm">
-                {fixture.away_team_name}
-              </span>
-              {isLive && (
-                <span className="font-bold text-lg">
-                  {fixture.away_goals}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
 
-        <div className="text-right min-w-[80px]">
-          <div className="text-sm text-muted-foreground">
-            {fixture.league_name}
-          </div>
-          {!isLive && (
-            <div className="text-sm font-medium">
-              {formatTime(fixture.date)}
+          {/* Away Team */}
+          <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
+            <div className="w-6 h-6 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-sm">
+              {fixture.away_team_name?.charAt(0) || 'A'}
             </div>
-          )}
+            <span className="font-medium truncate text-sm">
+              {fixture.away_team_name || 'Away Team'}
+            </span>
+          </div>
+
+          {/* League */}
+          <div className="text-right min-w-[80px]">
+            <Badge variant="outline" className="text-xs">
+              {fixture.league_name || `League ${fixture.league_id}`}
+            </Badge>
+          </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }

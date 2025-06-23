@@ -49,7 +49,7 @@ export function Navigation() {
   const pathname = usePathname()
 
   return (
-    <nav className="fixed left-0 top-14 z-40 hidden h-[calc(100vh-3.5rem)] w-64 border-r bg-background lg:block">
+    <nav className="fixed left-0 top-14 z-50 hidden h-[calc(100vh-3.5rem)] w-64 border-r bg-background lg:block pointer-events-auto">
       <div className="space-y-4 py-4">
         <div className="px-3 py-2">
           <div className="space-y-1">
@@ -62,11 +62,15 @@ export function Navigation() {
                   key={item.name}
                   href={item.href}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground',
-                    isActive 
-                      ? 'bg-accent text-accent-foreground' 
+                    'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground relative z-50',
+                    isActive
+                      ? 'bg-accent text-accent-foreground'
                       : 'text-muted-foreground'
                   )}
+                  onClick={(e) => {
+                    // Force navigation - debug için
+                    console.log('Navigation clicked:', item.name, item.href)
+                  }}
                 >
                   <Icon className="h-4 w-4" />
                   {item.name}

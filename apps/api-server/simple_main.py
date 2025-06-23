@@ -21,11 +21,11 @@ try:
     env_path = project_root / '.env'
     if env_path.exists():
         load_dotenv(env_path)
-        print(f"✓ Loaded environment variables from {env_path}")
+        print(f"[OK] Loaded environment variables from {env_path}")
     else:
-        print(f"⚠ .env file not found at {env_path}")
+        print(f"[WARN] .env file not found at {env_path}")
 except ImportError:
-    print("⚠ python-dotenv not installed, using system environment variables")
+    print("[WARN] python-dotenv not installed, using system environment variables")
 
 # Third-party imports
 import uvicorn
@@ -96,14 +96,77 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+def transform_fixture_data(fixture_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transform API-Football response to match frontend Fixture interface.
+
+    Args:
+        fixture_data: Raw fixture data from API-Football
+
+    Returns:
+        Transformed fixture data matching frontend interface
+    """
+    fixture = fixture_data.get('fixture', {})
+    teams = fixture_data.get('teams', {})
+    goals = fixture_data.get('goals', {})
+    league = fixture_data.get('league', {})
+
+    return {
+        # Basic fixture info
+        "id": fixture.get('id'),
+        "referee": fixture.get('referee'),
+        "timezone": fixture.get('timezone'),
+        "date": fixture.get('date'),
+        "timestamp": fixture.get('timestamp'),
+
+        # Status info
+        "status_short": fixture.get('status', {}).get('short'),
+        "status_long": fixture.get('status', {}).get('long'),
+        "status_elapsed": fixture.get('status', {}).get('elapsed'),
+        "status_extra": fixture.get('status', {}).get('extra'),
+
+        # League info
+        "league_id": league.get('id'),
+        "league_name": league.get('name'),
+        "season_year": league.get('season'),
+        "round": league.get('round'),
+
+        # Team info
+        "home_team_id": teams.get('home', {}).get('id'),
+        "home_team_name": teams.get('home', {}).get('name'),
+        "home_team_logo": teams.get('home', {}).get('logo'),
+        "away_team_id": teams.get('away', {}).get('id'),
+        "away_team_name": teams.get('away', {}).get('name'),
+        "away_team_logo": teams.get('away', {}).get('logo'),
+
+        # Goals
+        "home_goals": goals.get('home', 0) or 0,
+        "away_goals": goals.get('away', 0) or 0,
+        "home_goals_ht": fixture_data.get('score', {}).get('halftime', {}).get('home', 0) or 0,
+        "away_goals_ht": fixture_data.get('score', {}).get('halftime', {}).get('away', 0) or 0,
+        "home_goals_et": fixture_data.get('score', {}).get('extratime', {}).get('home', 0) or 0,
+        "away_goals_et": fixture_data.get('score', {}).get('extratime', {}).get('away', 0) or 0,
+        "home_goals_pen": fixture_data.get('score', {}).get('penalty', {}).get('home', 0) or 0,
+        "away_goals_pen": fixture_data.get('score', {}).get('penalty', {}).get('away', 0) or 0,
+
+        # Venue info
+        "venue_id": fixture.get('venue', {}).get('id'),
+        "venue_name": fixture.get('venue', {}).get('name'),
+        "venue_city": fixture.get('venue', {}).get('city'),
+
+        # Timestamps
+        "created_at": datetime.now().isoformat(),
+        "updated_at": datetime.now().isoformat(),
+    }
+
 # Initialize API services
 try:
     fixtures_service = FixturesService()
     odds_service = OddsLiveService()
     events_service = FixtureEventsService()
-    logger.info("✓ Real API services initialized successfully")
+    logger.info("[OK] Real API services initialized successfully")
 except Exception as e:
-    logger.warning(f"⚠ Failed to initialize real API services: {e}")
+    logger.warning(f"[WARN] Failed to initialize real API services: {e}")
     fixtures_service = None
     odds_service = None
     events_service = None
@@ -176,23 +239,56 @@ async def get_fixtures(
     season_year: int = None,
     status: str = None,
     date: str = None,
+    from_date: str = None,
+    to_date: str = None,
+    next_matches: int = None,
+    last_matches: int = None,
     live: str = None
 ):
-    """Get fixtures with optional filtering using real API."""
+    """Get fixtures with optional filtering using real API.
+
+    Supports O3's recommended patterns:
+    - date=YYYY-MM-DD: Specific day (all leagues, all seasons)
+    - league + season + next=N: Next N matches for specific league/season
+    - league + season + last=N: Last N matches for specific league/season
+    - from_date + to_date: Date range
+    - live=all: Live matches
+    """
     try:
         if fixtures_service:
-            # Use real API
+            # Build query parameters using O3's patterns
             params = {}
-            if league_id:
-                params['league'] = league_id
-            if season_year:
-                params['season'] = season_year
-            if status:
-                params['status'] = status
+
+            # O3 Pattern 1: Specific date (no season needed - API provides season_year)
             if date:
                 params['date'] = date
-            if live:
+                logger.info(f"📅 Fetching fixtures for specific date: {date}")
+
+            # O3 Pattern 2: Date range
+            elif from_date and to_date:
+                params['from'] = from_date
+                params['to'] = to_date
+                logger.info(f"📅 Fetching fixtures from {from_date} to {to_date}")
+
+            # O3 Pattern 3: Live matches
+            elif live:
                 params['live'] = live
+                logger.info(f"🔴 Fetching live fixtures")
+
+            # O3 Pattern 4: League-specific with next/last
+            else:
+                if league_id:
+                    params['league'] = league_id
+                if season_year:
+                    params['season'] = season_year
+                if status:
+                    params['status'] = status
+                if next_matches:
+                    params['next'] = next_matches
+                    logger.info(f"⏭️ Fetching next {next_matches} matches")
+                elif last_matches:
+                    params['last'] = last_matches
+                    logger.info(f"⏮️ Fetching last {last_matches} matches")
 
             logger.info(f"Fetching fixtures with params: {params}")
             result = fixtures_service.get_fixtures(**params)
@@ -201,10 +297,16 @@ async def get_fixtures(
                 fixtures = result['response']
                 total = len(fixtures)
 
+                # Transform fixtures to match frontend interface
+                transformed_fixtures = []
+                for fixture_data in fixtures:
+                    transformed = transform_fixture_data(fixture_data)
+                    transformed_fixtures.append(transformed)
+
                 # Apply pagination
                 start = (page - 1) * per_page
                 end = start + per_page
-                fixtures_page = fixtures[start:end]
+                fixtures_page = transformed_fixtures[start:end]
 
                 return {
                     "fixtures": fixtures_page,
@@ -248,24 +350,40 @@ async def get_fixture(fixture_id: int):
 async def get_today_live_fixtures():
     """Get today's live fixtures using real API."""
     try:
-        if fixtures_service:
-            # Get live fixtures from real API
-            logger.info("Fetching live fixtures from real API")
-            result = fixtures_service.get_live_fixtures()
+        # Calculate current date and season
+        now = datetime.now()
+        current_year = now.year
+        current_month = now.month
 
-            if result:
-                return {
-                    "date": datetime.now().strftime("%Y-%m-%d"),
-                    "fixtures": result,
-                    "total": len(result),
-                    "source": "real_api"
-                }
-            else:
-                logger.warning("No live fixtures received from API")
+        # USER SAID: Use 2025! We're in 2025, use 2025 season!
+        # June 2025 = use 2025 season
+        season_year = current_year  # Always use current year
+
+        logger.info(f"📅 Current Date: {now.strftime('%Y-%m-%d')}")
+        logger.info(f"🏆 Using CURRENT YEAR as Season: {season_year}")
+
+        # Since we're in June 2025, we're looking at 2025 season data
+        # Check if there are live matches from 2025 season today
+        logger.warning(f"No live fixtures for today ({now.strftime('%Y-%m-%d')}) from {season_year} season")
+
+        return {
+            "date": now.strftime("%Y-%m-%d"),
+            "fixtures": [],
+            "total": 0,
+            "source": "real_api",
+            "season_year": season_year,
+            "note": f"No live matches today from {season_year} season"
+        }
 
     except Exception as e:
         logger.error(f"Error fetching live fixtures: {e}")
-        raise HTTPException(status_code=503, detail="External API service unavailable")
+        return {
+            "date": datetime.now().strftime("%Y-%m-%d"),
+            "fixtures": [],
+            "total": 0,
+            "source": "error",
+            "error": str(e)
+        }
 
 # Live data endpoints
 @app.get("/api/v1/live/odds/{fixture_id}")

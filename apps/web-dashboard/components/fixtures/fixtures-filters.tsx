@@ -20,6 +20,7 @@ export interface FixturesFilters {
     to: Date
   }
   leagueId?: number
+  seasonYear?: number
   teamId?: number
   status?: string
   search?: string
@@ -68,13 +69,61 @@ export function FixturesFilters({ onFiltersChange }: FixturesFiltersProps) {
           </div>
         </div>
 
+        {/* Quick Date Buttons - Always visible */}
+        <div className="flex flex-wrap gap-2 mb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const today = new Date()
+              handleFilterChange('dateRange', { from: today, to: today })
+            }}
+          >
+            Today
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const yesterday = new Date()
+              yesterday.setDate(yesterday.getDate() - 1)
+              handleFilterChange('dateRange', { from: yesterday, to: yesterday })
+            }}
+          >
+            Yesterday
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const tomorrow = new Date()
+              tomorrow.setDate(tomorrow.getDate() + 1)
+              handleFilterChange('dateRange', { from: tomorrow, to: tomorrow })
+            }}
+          >
+            Tomorrow
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const today = new Date()
+              const nextWeek = new Date()
+              nextWeek.setDate(today.getDate() + 7)
+              handleFilterChange('dateRange', { from: today, to: nextWeek })
+            }}
+          >
+            Next 7 Days
+          </Button>
+        </div>
+
         {isExpanded && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
             {/* Date Range */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
                 <CalendarDays className="h-4 w-4" />
-                Date Range
+                Custom Date Range
               </Label>
               <DatePickerWithRange
                 value={filters.dateRange}
@@ -90,7 +139,7 @@ export function FixturesFilters({ onFiltersChange }: FixturesFiltersProps) {
               </Label>
               <Select
                 value={filters.leagueId?.toString()}
-                onValueChange={(value) => 
+                onValueChange={(value) =>
                   handleFilterChange('leagueId', value ? parseInt(value) : undefined)
                 }
               >
@@ -103,6 +152,28 @@ export function FixturesFilters({ onFiltersChange }: FixturesFiltersProps) {
                   <SelectItem value="78">Bundesliga</SelectItem>
                   <SelectItem value="135">Serie A</SelectItem>
                   <SelectItem value="61">Ligue 1</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Season */}
+            <div className="space-y-2">
+              <Label>Season (Optional)</Label>
+              <Select
+                value={filters.seasonYear?.toString()}
+                onValueChange={(value) =>
+                  handleFilterChange('seasonYear', value ? parseInt(value) : undefined)
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="All seasons" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2025">2025</SelectItem>
+                  <SelectItem value="2024">2024</SelectItem>
+                  <SelectItem value="2023">2023</SelectItem>
+                  <SelectItem value="2022">2022</SelectItem>
+                  <SelectItem value="2021">2021</SelectItem>
                 </SelectContent>
               </Select>
             </div>
